@@ -181,19 +181,9 @@ module.exports = function (Base, NAME, Constructor, next, DEFAULT, IS_SET, FORCE
  * @license  MIT
  */
 
-// The _isBuffer check is for Safari 5-7 support, because it's missing
-// Object.prototype.constructor. Remove this eventually
-module.exports = function (obj) {
-  return obj != null && (isBuffer(obj) || isSlowBuffer(obj) || !!obj._isBuffer)
-}
-
-function isBuffer (obj) {
-  return !!obj.constructor && typeof obj.constructor.isBuffer === 'function' && obj.constructor.isBuffer(obj)
-}
-
-// For Node v0.10 support. Remove this eventually.
-function isSlowBuffer (obj) {
-  return typeof obj.readFloatLE === 'function' && typeof obj.slice === 'function' && isBuffer(obj.slice(0, 0))
+module.exports = function isBuffer (obj) {
+  return obj != null && obj.constructor != null &&
+    typeof obj.constructor.isBuffer === 'function' && obj.constructor.isBuffer(obj)
 }
 
 
@@ -4580,6 +4570,7 @@ var pushToArray = function (arr, valueOrArray) {
 
 var toISO = Date.prototype.toISOString;
 
+var defaultFormat = formats['default'];
 var defaults = {
     addQueryPrefix: false,
     allowDots: false,
@@ -4589,7 +4580,8 @@ var defaults = {
     encode: true,
     encoder: utils.encode,
     encodeValuesOnly: false,
-    formatter: formats.formatters[formats['default']],
+    format: defaultFormat,
+    formatter: formats.formatters[defaultFormat],
     // deprecated
     indices: false,
     serializeDate: function serializeDate(date) { // eslint-disable-line func-name-matching
@@ -4597,6 +4589,14 @@ var defaults = {
     },
     skipNulls: false,
     strictNullHandling: false
+};
+
+var isNonNullishPrimitive = function isNonNullishPrimitive(v) { // eslint-disable-line func-name-matching
+    return typeof v === 'string'
+        || typeof v === 'number'
+        || typeof v === 'boolean'
+        || typeof v === 'symbol'
+        || typeof v === 'bigint'; // eslint-disable-line valid-typeof
 };
 
 var stringify = function stringify( // eslint-disable-line func-name-matching
@@ -4631,7 +4631,7 @@ var stringify = function stringify( // eslint-disable-line func-name-matching
         obj = '';
     }
 
-    if (typeof obj === 'string' || typeof obj === 'number' || typeof obj === 'boolean' || utils.isBuffer(obj)) {
+    if (isNonNullishPrimitive(obj) || utils.isBuffer(obj)) {
         if (encoder) {
             var keyValue = encodeValuesOnly ? prefix : encoder(prefix, defaults.encoder, charset);
             return [formatter(keyValue) + '=' + formatter(encoder(obj, defaults.encoder, charset))];
@@ -8180,7 +8180,7 @@ NAME in FProto || __webpack_require__("9e1e") && dP(FProto, NAME, {
 /***/ "8378":
 /***/ (function(module, exports) {
 
-var core = module.exports = { version: '2.6.8' };
+var core = module.exports = { version: '2.6.9' };
 if (typeof __e == 'number') __e = core; // eslint-disable-line no-undef
 
 
@@ -9298,7 +9298,7 @@ var parseKeys = function parseQueryStringKeys(givenKey, val, options) {
 
     // Get the parent
 
-    var segment = brackets.exec(key);
+    var segment = options.depth > 0 && brackets.exec(key);
     var parent = segment ? key.slice(0, segment.index) : key;
 
     // Stash the parent if it exists
@@ -9318,7 +9318,7 @@ var parseKeys = function parseQueryStringKeys(givenKey, val, options) {
     // Loop through children appending to the array until we hit depth
 
     var i = 0;
-    while ((segment = child.exec(key)) !== null && i < options.depth) {
+    while (options.depth > 0 && (segment = child.exec(key)) !== null && i < options.depth) {
         i += 1;
         if (!options.plainObjects && has.call(Object.prototype, segment[1].slice(1, -1))) {
             if (!options.allowPrototypes) {
@@ -9360,7 +9360,8 @@ var normalizeParseOptions = function normalizeParseOptions(opts) {
         comma: typeof opts.comma === 'boolean' ? opts.comma : defaults.comma,
         decoder: typeof opts.decoder === 'function' ? opts.decoder : defaults.decoder,
         delimiter: typeof opts.delimiter === 'string' || utils.isRegExp(opts.delimiter) ? opts.delimiter : defaults.delimiter,
-        depth: typeof opts.depth === 'number' ? opts.depth : defaults.depth,
+        // eslint-disable-next-line no-implicit-coercion, no-extra-parens
+        depth: (typeof opts.depth === 'number' || opts.depth === false) ? +opts.depth : defaults.depth,
         ignoreQueryPrefix: opts.ignoreQueryPrefix === true,
         interpretNumericEntities: typeof opts.interpretNumericEntities === 'boolean' ? opts.interpretNumericEntities : defaults.interpretNumericEntities,
         parameterLimit: typeof opts.parameterLimit === 'number' ? opts.parameterLimit : defaults.parameterLimit,
@@ -9391,50 +9392,6 @@ module.exports = function (str, opts) {
 
     return utils.compact(obj);
 };
-
-
-/***/ }),
-
-/***/ "9fa6":
-/***/ (function(module, exports, __webpack_require__) {
-
-"use strict";
-
-
-// btoa polyfill for IE<10 courtesy https://github.com/davidchambers/Base64.js
-
-var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
-
-function E() {
-  this.message = 'String contains an invalid character';
-}
-E.prototype = new Error;
-E.prototype.code = 5;
-E.prototype.name = 'InvalidCharacterError';
-
-function btoa(input) {
-  var str = String(input);
-  var output = '';
-  for (
-    // initialize result and counter
-    var block, charCode, idx = 0, map = chars;
-    // if the next str index does not exist:
-    //   change the mapping table to "="
-    //   check if d has no fractional digits
-    str.charAt(idx | 0) || (map = '=', idx % 1);
-    // "8 - idx % 1 * 8" generates the sequence 2, 4, 6, 8
-    output += map.charAt(63 & block >> 8 - idx % 1 * 8)
-  ) {
-    charCode = str.charCodeAt(idx += 3 / 4);
-    if (charCode > 0xFF) {
-      throw new E();
-    }
-    block = block << 8 | charCode;
-  }
-  return output;
-}
-
-module.exports = btoa;
 
 
 /***/ }),
@@ -9550,19 +9507,27 @@ for (var collections = getKeys(DOMIterables), i = 0; i < collections.length; i++
 var replace = String.prototype.replace;
 var percentTwenties = /%20/g;
 
-module.exports = {
-    'default': 'RFC3986',
-    formatters: {
-        RFC1738: function (value) {
-            return replace.call(value, percentTwenties, '+');
-        },
-        RFC3986: function (value) {
-            return value;
-        }
-    },
+var util = __webpack_require__("d233");
+
+var Format = {
     RFC1738: 'RFC1738',
     RFC3986: 'RFC3986'
 };
+
+module.exports = util.assign(
+    {
+        'default': Format.RFC3986,
+        formatters: {
+            RFC1738: function (value) {
+                return replace.call(value, percentTwenties, '+');
+            },
+            RFC3986: function (value) {
+                return String(value);
+            }
+        }
+    },
+    Format
+);
 
 
 /***/ }),
@@ -9579,7 +9544,6 @@ var buildURL = __webpack_require__("30b5");
 var parseHeaders = __webpack_require__("c345");
 var isURLSameOrigin = __webpack_require__("3934");
 var createError = __webpack_require__("2d83");
-var btoa = (typeof window !== 'undefined' && window.btoa && window.btoa.bind(window)) || __webpack_require__("9fa6");
 
 module.exports = function xhrAdapter(config) {
   return new Promise(function dispatchXhrRequest(resolve, reject) {
@@ -9591,22 +9555,6 @@ module.exports = function xhrAdapter(config) {
     }
 
     var request = new XMLHttpRequest();
-    var loadEvent = 'onreadystatechange';
-    var xDomain = false;
-
-    // For IE 8/9 CORS support
-    // Only supports POST and GET calls and doesn't returns the response headers.
-    // DON'T do this for testing b/c XMLHttpRequest is mocked, not XDomainRequest.
-    if ( true &&
-        typeof window !== 'undefined' &&
-        window.XDomainRequest && !('withCredentials' in request) &&
-        !isURLSameOrigin(config.url)) {
-      request = new window.XDomainRequest();
-      loadEvent = 'onload';
-      xDomain = true;
-      request.onprogress = function handleProgress() {};
-      request.ontimeout = function handleTimeout() {};
-    }
 
     // HTTP basic authentication
     if (config.auth) {
@@ -9621,8 +9569,8 @@ module.exports = function xhrAdapter(config) {
     request.timeout = config.timeout;
 
     // Listen for ready state
-    request[loadEvent] = function handleLoad() {
-      if (!request || (request.readyState !== 4 && !xDomain)) {
+    request.onreadystatechange = function handleLoad() {
+      if (!request || request.readyState !== 4) {
         return;
       }
 
@@ -9639,9 +9587,8 @@ module.exports = function xhrAdapter(config) {
       var responseData = !config.responseType || config.responseType === 'text' ? request.responseText : request.response;
       var response = {
         data: responseData,
-        // IE sends 1223 instead of 204 (https://github.com/axios/axios/issues/201)
-        status: request.status === 1223 ? 204 : request.status,
-        statusText: request.status === 1223 ? 'No Content' : request.statusText,
+        status: request.status,
+        statusText: request.statusText,
         headers: responseHeaders,
         config: config,
         request: request
@@ -10620,7 +10567,12 @@ var encode = function encode(str, defaultEncoder, charset) {
         return str;
     }
 
-    var string = typeof str === 'string' ? str : String(str);
+    var string = str;
+    if (typeof str === 'symbol') {
+        string = Symbol.prototype.toString.call(str);
+    } else if (typeof str !== 'string') {
+        string = String(str);
+    }
 
     if (charset === 'iso-8859-1') {
         return escape(string).replace(/%u[0-9a-f]{4}/gi, function ($0) {
@@ -11146,12 +11098,12 @@ if (typeof window !== 'undefined') {
 // Indicate to webpack that this file can be concatenated
 /* harmony default export */ var setPublicPath = (null);
 
-// CONCATENATED MODULE: ./node_modules/cache-loader/dist/cjs.js?{"cacheDirectory":"node_modules/.cache/vue-loader","cacheIdentifier":"515f0534-vue-loader-template"}!./node_modules/vue-loader/lib/loaders/templateLoader.js??vue-loader-options!./node_modules/cache-loader/dist/cjs.js??ref--0-0!./node_modules/vue-loader/lib??vue-loader-options!./src/components/VueBootstrapTable.vue?vue&type=template&id=073c7644&
-var render = function () {var _vm=this;var _h=_vm.$createElement;var _c=_vm._self._c||_h;return _c('div',[_c('div',{staticClass:"row"},[_c('div',{staticClass:"col-6"},[(_vm.showFilter)?_c('div',{staticStyle:{"padding-top":"10px","padding-bottom":"10px"}},[_c('div',{staticClass:"input-group"},[_c('input',{directives:[{name:"model",rawName:"v-model",value:(_vm.filterKey),expression:"filterKey"}],staticClass:"form-control",attrs:{"type":"text","placeholder":"Filter"},domProps:{"value":(_vm.filterKey)},on:{"input":function($event){if($event.target.composing){ return; }_vm.filterKey=$event.target.value}}})])]):_vm._e()]),_c('div',{staticClass:"col-6"},[(_vm.showColumnPicker)?_c('div',{staticStyle:{"padding-top":"10px","padding-bottom":"10px","float":"right"}},[_c('div',{staticClass:"btn-group"},[_vm._m(0),_c('div',{staticClass:"dropdown-menu dropdown-menu-right"},_vm._l((_vm.displayCols),function(column){return _c('button',{staticClass:"dropdown-item",on:{"click":function($event){$event.stopPropagation();$event.preventDefault();return _vm.toggleColumn(column)}}},[(column.visible)?_c('i',{staticClass:"fa fa-check"}):_vm._e(),_vm._v(" "+_vm._s(column.title)+"\n                        ")])}),0)])]):_vm._e()])]),_c('div',{staticClass:"row"},[_c('div',{staticClass:"col-sm-12"},[_c('div',{class:{'vue-table-loading': this.loading , 'vue-table-loading-hidden': !this.loading}},[_c('div',{staticClass:"spinner"})]),_c('table',{staticClass:"table table-bordered table-hover table-condensed table-striped vue-table"},[_c('thead',[_c('tr',[(_vm.selectable)?_c('th',{staticStyle:{"width":"40px"}},[_c('div',{staticClass:"custom-control custom-checkbox"},[_c('input',{directives:[{name:"model",rawName:"v-model",value:(_vm.allSelected),expression:"allSelected"}],staticClass:"custom-control-input",attrs:{"type":"checkbox","id":'checkAll'+_vm.instanceId,"aria-label":"Select All"},domProps:{"checked":Array.isArray(_vm.allSelected)?_vm._i(_vm.allSelected,null)>-1:(_vm.allSelected)},on:{"change":function($event){var $$a=_vm.allSelected,$$el=$event.target,$$c=$$el.checked?(true):(false);if(Array.isArray($$a)){var $$v=null,$$i=_vm._i($$a,$$v);if($$el.checked){$$i<0&&(_vm.allSelected=$$a.concat([$$v]))}else{$$i>-1&&(_vm.allSelected=$$a.slice(0,$$i).concat($$a.slice($$i+1)))}}else{_vm.allSelected=$$c}}}}),_c('label',{staticClass:"custom-control-label",attrs:{"for":'checkAll'+_vm.instanceId}})])]):_vm._e(),_vm._l((_vm.displayColsVisible),function(column){return _c('th',{staticClass:"icon",class:_vm.getClasses(column),attrs:{"track-by":"column"},on:{"click":function($event){return _vm.sortBy($event, column.name, column.sortable)}}},[_vm._v("\n                        "+_vm._s(column.title)+"\n                    ")])})],2)]),_c('tbody',_vm._l((_vm.filteredValuesSorted),function(entry,index){return _c('tr',{attrs:{"track-by":"entry"},on:{"click":function($event){return _vm.rowClickHandler($event, entry)}}},[(_vm.selectable)?_c('td',[_c('div',{staticClass:"custom-control custom-checkbox"},[_c('input',{directives:[{name:"model",rawName:"v-model",value:(entry.selected),expression:"entry.selected"}],staticClass:"custom-control-input",attrs:{"type":"checkbox","id":'check'+_vm.instanceId+index},domProps:{"checked":Array.isArray(entry.selected)?_vm._i(entry.selected,null)>-1:(entry.selected)},on:{"change":function($event){var $$a=entry.selected,$$el=$event.target,$$c=$$el.checked?(true):(false);if(Array.isArray($$a)){var $$v=null,$$i=_vm._i($$a,$$v);if($$el.checked){$$i<0&&(_vm.$set(entry, "selected", $$a.concat([$$v])))}else{$$i>-1&&(_vm.$set(entry, "selected", $$a.slice(0,$$i).concat($$a.slice($$i+1))))}}else{_vm.$set(entry, "selected", $$c)}}}}),_c('label',{staticClass:"custom-control-label",attrs:{"for":'check'+_vm.instanceId+index}})])]):_vm._e(),_vm._l((_vm.displayColsVisible),function(column){return _c('td',{directives:[{name:"show",rawName:"v-show",value:(column.visible),expression:"column.visible"}],class:column.cellstyle,attrs:{"track-by":"column"}},[_vm._t(column.name,[(column.renderfunction!==false)?_c('span',{domProps:{"innerHTML":_vm._s(column.renderfunction( column.name, entry ))}}):(!column.editable)?_c('span',[_vm._v(_vm._s(entry[column.name]))]):_c('value-field-section',{attrs:{"entry":entry,"columnname":column.name}})],{"column":column,"value":entry})],2)})],2)}),0)])]),(_vm.paginated)?_c('div',{staticClass:"col-sm-12"},[_c('div',{staticClass:"btn-toolbar",attrs:{"role":"toolbar","aria-label":"pagination bar"}},[_c('div',{staticClass:"btn-group mr-2",attrs:{"role":"group","aria-label":"first page"}},[_c('button',{staticClass:"btn btn-outline-primary",attrs:{"type":"button"},on:{"click":function($event){_vm.page=1}}},[_vm._v("«")])]),_c('div',{staticClass:"btn-group mr-2",attrs:{"role":"group","aria-label":"pages"}},_vm._l((_vm.validPageNumbers),function(index){return _c('button',{staticClass:"btn btn-outline-primary",class:{ active: _vm.page===index },attrs:{"type":"button"},on:{"click":function($event){_vm.page=index}}},[_vm._v("\n                        "+_vm._s(index)+"\n                    ")])}),0),(_vm.showPaginationEtc)?_c('div',{staticClass:"btn-group mr-2"},[_vm._v("...")]):_vm._e(),_c('div',{staticClass:"btn-group",attrs:{"role":"group","aria-label":"last page"}},[_c('button',{staticClass:"btn btn-outline-primary",attrs:{"type":"button"},on:{"click":function($event){_vm.page=_vm.maxPage}}},[_vm._v("»")])])])]):_vm._e()])])}
+// CONCATENATED MODULE: ./node_modules/cache-loader/dist/cjs.js?{"cacheDirectory":"node_modules/.cache/vue-loader","cacheIdentifier":"75e64662-vue-loader-template"}!./node_modules/vue-loader/lib/loaders/templateLoader.js??vue-loader-options!./node_modules/cache-loader/dist/cjs.js??ref--0-0!./node_modules/vue-loader/lib??vue-loader-options!./src/components/VueBootstrapTable.vue?vue&type=template&id=5cd37ee1&
+var render = function () {var _vm=this;var _h=_vm.$createElement;var _c=_vm._self._c||_h;return _c('div',[_c('div',{staticClass:"row"},[_c('div',{staticClass:"col-6"},[(_vm.showFilter)?_c('div',{staticStyle:{"padding-top":"10px","padding-bottom":"10px"}},[_c('div',{staticClass:"input-group"},[_c('input',{directives:[{name:"model",rawName:"v-model",value:(_vm.filterKey),expression:"filterKey"}],staticClass:"form-control",attrs:{"type":"text","placeholder":_vm.filterPlaceholder},domProps:{"value":(_vm.filterKey)},on:{"input":function($event){if($event.target.composing){ return; }_vm.filterKey=$event.target.value}}})])]):_vm._e()]),_c('div',{staticClass:"col-6"},[(_vm.showColumnPicker)?_c('div',{staticStyle:{"padding-top":"10px","padding-bottom":"10px","float":"right"}},[_c('div',{staticClass:"btn-group"},[_vm._m(0),_c('div',{staticClass:"dropdown-menu dropdown-menu-right"},_vm._l((_vm.displayCols),function(column){return _c('button',{staticClass:"dropdown-item",on:{"click":function($event){$event.stopPropagation();$event.preventDefault();return _vm.toggleColumn(column)}}},[(column.visible)?_c('i',{staticClass:"fa fa-check"}):_vm._e(),_vm._v(" "+_vm._s(column.title)+"\n                        ")])}),0)])]):_vm._e()])]),_c('div',{staticClass:"row"},[_c('div',{staticClass:"col-sm-12"},[_c('div',{class:{'vue-table-loading': this.loading , 'vue-table-loading-hidden': !this.loading}},[_c('div',{staticClass:"spinner"})]),_c('table',{staticClass:"table table-bordered table-hover table-condensed table-striped vue-table"},[_c('thead',[_c('tr',[(_vm.selectable)?_c('th',{staticStyle:{"width":"40px"}},[_c('div',{staticClass:"custom-control custom-checkbox"},[_c('input',{directives:[{name:"model",rawName:"v-model",value:(_vm.allSelected),expression:"allSelected"}],staticClass:"custom-control-input",attrs:{"type":"checkbox","id":'checkAll'+_vm.instanceId,"aria-label":"Select All"},domProps:{"checked":Array.isArray(_vm.allSelected)?_vm._i(_vm.allSelected,null)>-1:(_vm.allSelected)},on:{"change":function($event){var $$a=_vm.allSelected,$$el=$event.target,$$c=$$el.checked?(true):(false);if(Array.isArray($$a)){var $$v=null,$$i=_vm._i($$a,$$v);if($$el.checked){$$i<0&&(_vm.allSelected=$$a.concat([$$v]))}else{$$i>-1&&(_vm.allSelected=$$a.slice(0,$$i).concat($$a.slice($$i+1)))}}else{_vm.allSelected=$$c}}}}),_c('label',{staticClass:"custom-control-label",attrs:{"for":'checkAll'+_vm.instanceId}})])]):_vm._e(),_vm._l((_vm.displayColsVisible),function(column){return _c('th',{staticClass:"icon",class:_vm.getClasses(column),attrs:{"track-by":"column"},on:{"click":function($event){return _vm.sortBy($event, column.name, column.sortable)}}},[_vm._v("\n                        "+_vm._s(column.title)+"\n                    ")])})],2)]),_c('tbody',_vm._l((_vm.filteredValuesSorted),function(entry,index){return _c('tr',{attrs:{"track-by":"entry"},on:{"click":function($event){return _vm.rowClickHandler($event, entry)}}},[(_vm.selectable)?_c('td',[_c('div',{staticClass:"custom-control custom-checkbox"},[_c('input',{directives:[{name:"model",rawName:"v-model",value:(entry.selected),expression:"entry.selected"}],staticClass:"custom-control-input",attrs:{"type":"checkbox","id":'check'+_vm.instanceId+index},domProps:{"checked":Array.isArray(entry.selected)?_vm._i(entry.selected,null)>-1:(entry.selected)},on:{"change":function($event){var $$a=entry.selected,$$el=$event.target,$$c=$$el.checked?(true):(false);if(Array.isArray($$a)){var $$v=null,$$i=_vm._i($$a,$$v);if($$el.checked){$$i<0&&(_vm.$set(entry, "selected", $$a.concat([$$v])))}else{$$i>-1&&(_vm.$set(entry, "selected", $$a.slice(0,$$i).concat($$a.slice($$i+1))))}}else{_vm.$set(entry, "selected", $$c)}}}}),_c('label',{staticClass:"custom-control-label",attrs:{"for":'check'+_vm.instanceId+index}})])]):_vm._e(),_vm._l((_vm.displayColsVisible),function(column){return _c('td',{directives:[{name:"show",rawName:"v-show",value:(column.visible),expression:"column.visible"}],class:column.cellstyle,attrs:{"track-by":"column"}},[_vm._t(column.name,[(column.renderfunction!==false)?_c('span',{domProps:{"innerHTML":_vm._s(column.renderfunction( column.name, entry ))}}):(!column.editable)?_c('span',[_vm._v(_vm._s(entry[column.name]))]):_c('value-field-section',{attrs:{"entry":entry,"columnname":column.name}})],{"column":column,"value":entry})],2)})],2)}),0)])]),(_vm.paginated)?_c('div',{staticClass:"col-sm-12"},[_c('div',{staticClass:"btn-toolbar",attrs:{"role":"toolbar","aria-label":"pagination bar"}},[_c('div',{staticClass:"btn-group mr-2",attrs:{"role":"group","aria-label":"first page"}},[_c('button',{staticClass:"btn btn-outline-primary",attrs:{"type":"button"},on:{"click":function($event){_vm.page=1}}},[_vm._v("«")])]),_c('div',{staticClass:"btn-group mr-2",attrs:{"role":"group","aria-label":"pages"}},_vm._l((_vm.validPageNumbers),function(index){return _c('button',{staticClass:"btn btn-outline-primary",class:{ active: _vm.page===index },attrs:{"type":"button"},on:{"click":function($event){_vm.page=index}}},[_vm._v("\n                        "+_vm._s(index)+"\n                    ")])}),0),(_vm.showPaginationEtc)?_c('div',{staticClass:"btn-group mr-2"},[_vm._v("...")]):_vm._e(),_c('div',{staticClass:"btn-group",attrs:{"role":"group","aria-label":"last page"}},[_c('button',{staticClass:"btn btn-outline-primary",attrs:{"type":"button"},on:{"click":function($event){_vm.page=_vm.maxPage}}},[_vm._v("»")])])])]):_vm._e()])])}
 var staticRenderFns = [function () {var _vm=this;var _h=_vm.$createElement;var _c=_vm._self._c||_h;return _c('button',{staticClass:"btn btn-outline-primary dropdown-toggle",attrs:{"type":"button","data-toggle":"dropdown","aria-haspopup":"true"}},[_vm._v("\n                        Columns "),_c('span',{staticClass:"caret"})])}]
 
 
-// CONCATENATED MODULE: ./src/components/VueBootstrapTable.vue?vue&type=template&id=073c7644&
+// CONCATENATED MODULE: ./src/components/VueBootstrapTable.vue?vue&type=template&id=5cd37ee1&
 
 // EXTERNAL MODULE: ./node_modules/core-js/modules/es6.function.name.js
 var es6_function_name = __webpack_require__("7f7f");
@@ -11188,7 +11140,7 @@ var lodash_includes_default = /*#__PURE__*/__webpack_require__.n(lodash_includes
 var lodash_findindex = __webpack_require__("07a7");
 var lodash_findindex_default = /*#__PURE__*/__webpack_require__.n(lodash_findindex);
 
-// CONCATENATED MODULE: ./node_modules/cache-loader/dist/cjs.js?{"cacheDirectory":"node_modules/.cache/vue-loader","cacheIdentifier":"515f0534-vue-loader-template"}!./node_modules/vue-loader/lib/loaders/templateLoader.js??vue-loader-options!./node_modules/cache-loader/dist/cjs.js??ref--0-0!./node_modules/vue-loader/lib??vue-loader-options!./src/components/ValueFieldSection.vue?vue&type=template&id=4aa5b17a&scoped=true&
+// CONCATENATED MODULE: ./node_modules/cache-loader/dist/cjs.js?{"cacheDirectory":"node_modules/.cache/vue-loader","cacheIdentifier":"75e64662-vue-loader-template"}!./node_modules/vue-loader/lib/loaders/templateLoader.js??vue-loader-options!./node_modules/cache-loader/dist/cjs.js??ref--0-0!./node_modules/vue-loader/lib??vue-loader-options!./src/components/ValueFieldSection.vue?vue&type=template&id=4aa5b17a&scoped=true&
 var ValueFieldSectionvue_type_template_id_4aa5b17a_scoped_true_render = function () {var _vm=this;var _h=_vm.$createElement;var _c=_vm._self._c||_h;return (!_vm.enabled)?_c('span',{staticClass:"editableField",on:{"dblclick":_vm.toggleInput}},[_vm._v(_vm._s(this.entry[this.columnname]))]):(_vm.enabled)?_c('div',{staticClass:"input-group"},[_c('input',{directives:[{name:"model",rawName:"v-model",value:(_vm.datavalue),expression:"datavalue"}],staticClass:"form-control",attrs:{"type":"text"},domProps:{"value":(_vm.datavalue)},on:{"keyup":[function($event){if(!$event.type.indexOf('key')&&_vm._k($event.keyCode,"enter",13,$event.key,"Enter")){ return null; }return _vm.saveThis($event)},function($event){if(!$event.type.indexOf('key')&&_vm._k($event.keyCode,"esc",27,$event.key,["Esc","Escape"])){ return null; }return _vm.cancelThis($event)}],"input":function($event){if($event.target.composing){ return; }_vm.datavalue=$event.target.value}}}),_c('span',{staticClass:"input-group-btn"},[_c('button',{staticClass:"btn btn-danger",attrs:{"type":"button"},on:{"click":_vm.cancelThis}},[_c('span',{staticClass:"fa fa-times",attrs:{"aria-hidden":"true"}})]),_c('button',{staticClass:"btn btn-primary",attrs:{"type":"button"},on:{"click":_vm.saveThis}},[_c('span',{staticClass:"fa fa-check",attrs:{"aria-hidden":"true"}})])])]):_vm._e()}
 var ValueFieldSectionvue_type_template_id_4aa5b17a_scoped_true_staticRenderFns = []
 
@@ -11650,6 +11602,15 @@ Object(es6_promise["polyfill"])();
     },
 
     /**
+     * Placeholder value for the filter input. Default: 'Filter'
+     */
+    filterPlaceholder: {
+      type: String,
+      required: false,
+      default: 'Filter'
+    },
+
+    /**
      * Enable/disable column picker to show/hide table columns, optional, default false
      */
     showColumnPicker: {
@@ -11970,8 +11931,6 @@ Object(es6_promise["polyfill"])();
       }
     },
     fetchData: function fetchData(dataCallBackFunction) {
-      var _this = this;
-
       var self = this;
       var ajaxParameters = {
         params: {}
@@ -11989,9 +11948,9 @@ Object(es6_promise["polyfill"])();
           //COPY
           if (this.ajax !== null && this.ajax.axiosConfig !== null && this.ajax.axiosConfig !== undefined) {
             ajaxParameters = JSON.parse(JSON.stringify(this.ajax.axiosConfig));
-          }
+          } //ajaxParameters.params = {};
 
-          ajaxParameters.params = {};
+
           ajaxParameters.params.sortcol = this.sortKey;
           ajaxParameters.params.sortdir = tColsDir;
           ajaxParameters.params.filter = this.filterKey;
@@ -12030,9 +11989,8 @@ Object(es6_promise["polyfill"])();
           //COPY
           if (this.ajax !== null && this.ajax.axiosConfig !== null && this.ajax.axiosConfig !== undefined) {
             ajaxParameters = JSON.parse(JSON.stringify(this.ajax.axiosConfig));
-          }
+          } //ajaxParameters.params = {};
 
-          ajaxParameters.params = {};
         }
 
         if (this.ajax.method === "POST") {// Do nothing at this point !
@@ -12040,18 +11998,17 @@ Object(es6_promise["polyfill"])();
       }
 
       if (this.ajax.enabled && this.ajax.method === "GET") {
-        axios_default.a.get(self.ajax.url, ajaxParameters).then(function (response) {
-          if (_this.ajax.delegate) {
+        axios_default.a.get(this.ajax.url, ajaxParameters).then(function (response) {
+          if (self.ajax.delegate) {
             if (response.data.echo !== self.echo) {
               return;
             }
           }
 
           dataCallBackFunction(response.data);
-
-          _this.$parent.$emit('ajaxLoadedEvent', response.data);
+          self.$parent.$emit('ajaxLoadedEvent', response.data);
         }).catch(function (e) {
-          _this.$parent.$emit('ajaxLoadingError', e);
+          self.$parent.$emit('ajaxLoadingError', e);
         });
       }
 
@@ -12063,17 +12020,16 @@ Object(es6_promise["polyfill"])();
         }
 
         axios_default.a.post(self.ajax.url, lib_default.a.stringify(ajaxParameters), tempAxiosConf).then(function (response) {
-          if (_this.ajax.delegate) {
+          if (self.ajax.delegate) {
             if (response.data.echo !== self.echo) {
               return;
             }
           }
 
           dataCallBackFunction(response.data);
-
-          _this.$parent.$emit('ajaxLoadedEvent', response.data);
+          self.$parent.$emit('ajaxLoadedEvent', response.data);
         }).catch(function (e) {
-          _this.$parent.$emit('ajaxLoadingError', e);
+          self.$parent.$emit('ajaxLoadingError', e);
         });
       }
     },

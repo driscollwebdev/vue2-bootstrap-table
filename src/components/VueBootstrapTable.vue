@@ -6,7 +6,7 @@
             <div class="col-6">
                 <div v-if="showFilter" style="padding-top: 10px;padding-bottom: 10px;">
                     <div class="input-group">
-                        <input type="text" class="form-control" placeholder="Filter" v-model="filterKey">
+                        <input type="text" class="form-control" :placeholder="filterPlaceholder" v-model="filterKey">
                         <!--<div class="input-group-append">
                             <span class="input-group-text fa fa-search"></span>
                         </div>-->
@@ -286,6 +286,14 @@
                 type: Boolean,
                 required: false,
                 default: true,
+            },
+            /**
+             * Placeholder value for the filter input. Default: 'Filter'
+             */            
+            filterPlaceholder: {
+                type: String,
+                required: false,
+                default: 'Filter'
             },
             /**
              * Enable/disable column picker to show/hide table columns, optional, default false
@@ -614,7 +622,7 @@
                                 JSON.stringify(this.ajax.axiosConfig)
                             );
                         }
-                        ajaxParameters.params = {};
+                        //ajaxParameters.params = {};
                         ajaxParameters.params.sortcol = this.sortKey;
                         ajaxParameters.params.sortdir = tColsDir;
                         ajaxParameters.params.filter = this.filterKey;
@@ -648,25 +656,25 @@
                         if (this.ajax !== null && this.ajax.axiosConfig!==null && this.ajax.axiosConfig!== undefined) {
                             ajaxParameters = JSON.parse(JSON.stringify(this.ajax.axiosConfig));
                         }
-                        ajaxParameters.params = {};
+                        //ajaxParameters.params = {};
                     }
                     if ( this.ajax.method=== "POST" ) {
                         // Do nothing at this point !
                     }
                 }
                 if (this.ajax.enabled && this.ajax.method === "GET") {
-                    axios.get(self.ajax.url, ajaxParameters )
+                    axios.get(this.ajax.url, ajaxParameters )
                         .then(response => {
-                            if (this.ajax.delegate) {
+                            if (self.ajax.delegate) {
                                 if (response.data.echo !== self.echo) {
                                     return;
                                 }
                             }
                             dataCallBackFunction(response.data);
-                            this.$parent.$emit('ajaxLoadedEvent', response.data);
+                            self.$parent.$emit('ajaxLoadedEvent', response.data);
                         })
                         .catch(e => {
-                            this.$parent.$emit('ajaxLoadingError', e);
+                            self.$parent.$emit('ajaxLoadingError', e);
                         });
                 }
                 if (this.ajax.enabled && this.ajax.method === "POST") {
@@ -676,18 +684,18 @@
                     }
                     axios.post(self.ajax.url, qs.stringify(ajaxParameters) , tempAxiosConf )
                         .then(response => {
-                            if (this.ajax.delegate) {
+                            if (self.ajax.delegate) {
                                 if (response.data.echo !== self.echo) {
                                     return;
                                 }
                             }
 
                             dataCallBackFunction(response.data);
-                            this.$parent.$emit('ajaxLoadedEvent', response.data);
+                            self.$parent.$emit('ajaxLoadedEvent', response.data);
 
                         })
                         .catch(e => {
-                            this.$parent.$emit('ajaxLoadingError', e);
+                            self.$parent.$emit('ajaxLoadingError', e);
                         });
                 }
             },
